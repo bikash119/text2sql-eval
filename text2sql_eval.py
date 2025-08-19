@@ -70,12 +70,13 @@ class SQLEvalResult:
 class DuckDBTextToSQLApp:
     """Main application class integrating DSPy with TruLens ground truth evaluation"""
 
-    def __init__(self):
+    def __init__(self,session: TruSession = None):
         super().__init__() # Call superclass constructor
         self.dspy_module = DSPyTextToSQL()
         self.conn = duckdb.connect(":memory:")
-        self.session = TruSession()
-
+        if session is None:
+            raise ValueError("A valid TruSession must be provided for initialization.")
+        self.session = session
         # Load and prepare the dataset
         self.dataset = self._load_and_prepare_dataset()
 
@@ -376,20 +377,13 @@ class DuckDBTextToSQLApp:
                 error=str(e)
             )
 
-    def run_evaluation_experiment(self, num_samples: int = 10):
+    def run_evaluation_experiment(self, num_samples: int = 10,tru_app: TruApp = None):
         """Run evaluation experiment on a subset of the dataset"""
 
         print(f"Running evaluation experiment on {num_samples} samples...")
         print(f"Creating TruApp with {len(self.feedback_functions)} feedback functions")
         for i, f in enumerate(self.feedback_functions):
             print(f"Feedback {i+1}: {f.name}")
-
-        # Create TruLens app for monitoring
-        tru_app = TruApp(
-            self,
-            app_name="DSPy_Text2SQL_GroundTruth_v1",
-            feedbacks=self.feedback_functions
-        )
 
         # Sample from the dataset
         test_samples = self.ground_truth_df.head(num_samples)
@@ -468,13 +462,22 @@ def main():
     print("="*80)
 
     # Initialize the application
-    app = DuckDBTextToSQLApp()
+    # Create TruLens app for monitoring
+    session = TruSession(database_url=TRULENS_DB_URL)
+    app = DuckDBTextToSQLApp(trusession=session)
 
     # Display dataset info
     app.get_ground_truth_dataset_info()
+    TRULENS_DB_PATH = "my-trulens.sqlite3"
+    TRULENS_DB_URL = f"sqlite:///{os.path.abspath(TRULENS_DB_PATH)}"
+    tru_app = TruApp(
+        app=app,
+        app_name="DSPy_Text2SQL_GroundTruth_v1",
+        feedbacks=app.feedback_functions
+    )
 
     # Run evaluation experiment
-    results, tru_app = app.run_evaluation_experiment(num_samples=5)
+    results, tru_app = app.run_evaluation_experiment(num_samples=5,tru_app=tru_app)
 
     # Display summary
     app.display_evaluation_summary(tru_app)
