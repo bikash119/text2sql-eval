@@ -134,7 +134,7 @@ class DuckDBTextToSQLApp:
         print("Setting up ground truth dataset in TruLens...")
 
         # Reset database for clean start
-        self.session.reset_database()
+        # self.session.reset_database()
 
         # Prepare ground truth dataframe
         self.ground_truth_df = self._prepare_ground_truth_dataframe()
@@ -458,22 +458,23 @@ class DuckDBTextToSQLApp:
 def main():
     """Main execution function"""
 
+    TRULENS_DB_PATH = "my-trulens.sqlite3"
+    TRULENS_DB_URL = f"sqlite:///{os.path.abspath(TRULENS_DB_PATH)}"
     print("🚀 Initializing DSPy + TruLens Text-to-SQL Ground Truth Evaluation")
     print("="*80)
 
     # Initialize the application
     # Create TruLens app for monitoring
     session = TruSession(database_url=TRULENS_DB_URL)
-    app = DuckDBTextToSQLApp(trusession=session)
+    app = DuckDBTextToSQLApp(session=session)
 
     # Display dataset info
     app.get_ground_truth_dataset_info()
-    TRULENS_DB_PATH = "my-trulens.sqlite3"
-    TRULENS_DB_URL = f"sqlite:///{os.path.abspath(TRULENS_DB_PATH)}"
     tru_app = TruApp(
         app=app,
-        app_name="DSPy_Text2SQL_GroundTruth_v1",
-        feedbacks=app.feedback_functions
+        app_name="DSPy_Text2SQL_v1",
+        feedbacks=app.feedback_functions,
+        app_version="1.0.0",
     )
 
     # Run evaluation experiment
@@ -481,9 +482,6 @@ def main():
 
     # Display summary
     app.display_evaluation_summary(tru_app)
-
-    print(f"\n🔍 To view detailed TruLens dashboard:")
-    print(f"app.session.run_dashboard()")
 
     return app, tru_app, results
 
@@ -496,8 +494,3 @@ if __name__ == "__main__":
     
     app, tru_app, results = main()
     
-    # Automatically start dashboard (optional)
-    start_dashboard = input("\n🔍 Start TruLens dashboard? (y/n): ").lower().strip()
-    if start_dashboard in ['y', 'yes']:
-        print("🌐 Starting TruLens dashboard...")
-        app.session.run_dashboard()
