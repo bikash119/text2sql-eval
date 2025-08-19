@@ -1,8 +1,8 @@
 import dspy
 import duckdb
 import pandas as pd
-from typing import List, Dict, Any, Optional, Tuple
-import json
+from typing import  Optional
+import time
 from dataclasses import dataclass
 from datasets import load_dataset
 import re
@@ -24,7 +24,7 @@ load_dotenv()
 dspy.configure(lm=dspy.LM("claude-3-5-haiku-20241022",api_key=os.getenv("api_key")))
 
 class TextToSQLSignature(dspy.Signature):
-    """Convert natural language questions to DuckDB SQL queries with schema context"""
+    """Given schema and data manipulation statements convert natural language questions to DuckDB SQL queries"""
 
     schema_info = dspy.InputField(desc="Database schema information with table names, columns, types, and sample data")
     question = dspy.InputField(desc="Natural language question about the data")
@@ -155,10 +155,10 @@ class DuckDBTextToSQLApp:
     def _setup_feedback_functions(self):
         """Setup TruLens feedback functions for ground truth evaluation"""
 
-        # Initialize OpenAI provider for TruLens
+        # Initialize Claude provider for TruLens
         provider = LiteLLM(model_engine="claude-3-5-haiku-20241022")
         
-        if self._test_provider_connection(provider) is None:
+        if not self._test_provider_connection(provider):
             print("❌ Provider failed, using dummy feedbacks")
             self.feedback_functions = []
             return
@@ -176,8 +176,7 @@ class DuckDBTextToSQLApp:
                 name="SQL Ground Truth Agreement"
             ).on(query_selector).on(generated_sql_selector)
         
-
-        # # Custom SQL correctness feedback
+        # Custom SQL correctness feedback
         self.f_sql_correctness = (
             Feedback(
                 self._evaluate_sql_correctness,
@@ -186,7 +185,15 @@ class DuckDBTextToSQLApp:
             .on(query_selector)
             .on(generated_sql_selector)
         )
-
+        # Custom SQL function to evaluate if sql contains valid filtering syntax
+        self.f_sql_filtering = (
+            Feedback(
+                lambda question, generated_sql: 1.0 if "WHERE" in generated_sql.upper() else 0.0,
+                name="SQL Filtering Validity"
+            )
+            .on(query_selector)
+            .on(generated_sql_selector)
+        )
         # Schema relevance feedback
         self.f_schema_relevance = (
             Feedback(
@@ -196,7 +203,6 @@ class DuckDBTextToSQLApp:
             .on(schema_selector)
             .on(generated_sql_selector)
         )
-
         self.feedback_functions = [
             self.f_sql_groundtruth,
             self.f_sql_correctness,
@@ -479,11 +485,15 @@ def main():
 
     # Run evaluation experiment
     results, tru_app = app.run_evaluation_experiment(num_samples=5,tru_app=tru_app)
-
+    print("⏳ Waiting for feedback evaluations to complete...")
+    time.sleep(10)  # Give enough time for async feedback
+    
     # Display summary
     app.display_evaluation_summary(tru_app)
-
-    return app, tru_app, results
+    
+    # ADD THIS: Additional wait before cleanup
+    print("🔄 Finalizing evaluation...")
+    time.sleep(5)
 
 if __name__ == "__main__":
     import os
@@ -492,5 +502,5 @@ if __name__ == "__main__":
     # Load environment variables
     load_dotenv()
     
-    app, tru_app, results = main()
+    main()
     
